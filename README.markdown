@@ -43,6 +43,17 @@ Item: `//country`
 Value: `@abbr`  
 Label: `text()`
 
+The "Group" option accepts an XPath expression. Each selected node is userd to create a new `<optgroup>`in the selectbox. The `<optgroup>` is fetched with the items selected for the XPaht expression defined in "Item" option. If "Group" option is defined the path of the "Item" is relative to the "Group" value.
+
+Example to create `<optgroup>` options using "Group" and "Group Text" xpath values (XML file inclided with this exetension):
+
+XML Location: `bookstore_en.xml`
+Group: `//book`
+Group Text: `@category`
+Item: `title`
+Label: `text()`
+
+
 ### Caching
 
 Caching of the XML file is applied only when using a URL as the "XML Location". Local XML files are not cached. If your feed changes infrequently, set the cache interval high to perhaps several hours, days or even weeks. If the data changes frequently then use a lower value (1 minute minimum) but be aware of the performance implications for your users.

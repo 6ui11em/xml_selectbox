@@ -58,9 +58,7 @@
 				$cache = new Cacheable($this->_Parent->_Parent->Database);
 				$cachedData = $cache->check($cache_id);
 			
-			
 				if(!$cachedData) {
-					
 						$ch = new Gateway;
 						$ch->init();
 						$ch->setopt('URL', $xml_location);
@@ -90,25 +88,59 @@
 			$options = array();
 			if (!$xml) return $options;
 			
-			$items = $xml->xpath($this->get('item_xpath'));
-			foreach($items as $item) {
-				
-				$option = array();
-				
-				$text_xpath = $item->xpath($this->get('text_xpath'));
-				$option['text'] = General::sanitize((string)$text_xpath[0]);
-				
-				if ($this->get('value_xpath') != '') {
-					$value_xpath = $item->xpath($this->get('value_xpath'));
-					$option['value'] = General::sanitize((string)$value_xpath[0]);
-				}
-				
-				if ((string)$option['value'] == '') $option['value'] = $option['text'];
-				
-				$options[] = $option;
-				
-			}
+			$groups = $this->get('group_xpath') != '' ? $xml->xpath($this->get('group_xpath')) : false;
 			
+			// if there are groups defined
+			if (is_array($groups) && count($groups) > 0) {
+				foreach($groups as $group) {
+					$items = $group->xpath($this->get('item_xpath'));
+					
+					// If there are items -> add group and their items
+					if (is_array($items) && count($items) > 0) {
+										
+						$label_xpath = $group->xpath($this->get('grouptext_xpath'));
+						$label = General::sanitize((string)$label_xpath[0]);
+	
+						$option = array('label'=>$label,'options'=>array());										
+	
+						foreach($items as $item) {
+							$text_xpath = $item->xpath($this->get('text_xpath'));
+							$text = General::sanitize((string)$text_xpath[0]);
+	
+							$o = array('text'=>$text, 'value'=>$text);
+													
+							if ($this->get('value_xpath') != '') {
+								$value_xpath = $item->xpath($this->get('value_xpath'));
+								$o['value'] = General::sanitize((string)$value_xpath[0]);
+							}
+													
+							array_push($option['options'], $o);
+						}
+						array_push($options, $option);
+					}
+
+				}	
+			} else {
+				$items = $xml->xpath($this->get('item_xpath'));
+				foreach($items as $item) {
+					
+					$option = array();
+					
+					$text_xpath = $item->xpath($this->get('text_xpath'));
+					$option['text'] = General::sanitize((string)$text_xpath[0]);
+					
+					if ($this->get('value_xpath') != '') {
+						$value_xpath = $item->xpath($this->get('value_xpath'));
+						$option['value'] = General::sanitize((string)$value_xpath[0]);
+					}
+					
+					if ((string)$option['value'] == '') $option['value'] = $option['text'];
+					
+					$options[] = $option;
+					
+				}
+			}
+						
 			return $options;			
 		}
 		
@@ -119,7 +151,16 @@
 			if(!is_array($data['value'])) $data['value'] = array($data['value']);
 			
 			foreach($states as $state){
-				if (in_array($state['value'], $data['value'])) $selected[$state['value']] = $state['text'];
+				if(isset($state['label'])){
+					$state_options = $state['options'];
+					foreach ($state_options as $o) {
+						if (in_array($o['value'], $data['value'])) {
+							$selected[$o['value']] = $o['text'];				
+							break;
+						}
+					}
+				} else
+					if (in_array($state['value'], $data['value'])) $selected[$state['value']] = $state['text'];
 			}
 			return $selected;
 		}
@@ -133,10 +174,24 @@
 			$options = array();
 			
 			$value_found = false;
+
+			// $options[0] = array('label'=>'1', 'options'=>array());
 			foreach($states as $state){
-				$selected = in_array($state['value'], $data['value']);
-				if ($selected == true) $value_found = true;
-				$options[] = array($state['value'], $selected, $state['text']);
+				if(isset($state['label'])){
+					$tmp_options = array('label'=>$state['label'], 'options'=>array());
+					$state_options = $state['options'];
+					foreach ($state_options as $o) {
+						$selected = in_array($o['value'], $data['value']);
+						if ($selected == true) $value_found = true;
+						array_push($tmp_options['options'], array($o['value'], $selected, $o['text']));				
+					}
+					$options[] = $tmp_options;
+				} else {
+					$selected = in_array($state['value'], $data['value']);
+					if ($selected == true) $value_found = true;
+					$options[]=array($state['value'], $selected, $state['text']);				
+				}
+				//array_push($options[0]['options'], array($state['value'], $selected, $state['text']));				
 			}
 			
 			if ($value_found == false && $data[0] != null) {
@@ -197,6 +252,8 @@
 			
 			$fields['field_id'] = $id;
 			if($this->get('xml_location') != '') $fields['xml_location'] = $this->get('xml_location');			
+			if($this->get('group_xpath') != '') $fields['group_xpath'] = $this->get('group_xpath');
+			if($this->get('grouptext_xpath') != '') $fields['grouptext_xpath'] = $this->get('grouptext_xpath');
 			if($this->get('item_xpath') != '') $fields['item_xpath'] = $this->get('item_xpath');
 			if($this->get('text_xpath') != '') $fields['text_xpath'] = $this->get('text_xpath');
 			if($this->get('value_xpath') != '') $fields['value_xpath'] = $this->get('value_xpath');
@@ -217,14 +274,31 @@
 				
 		public function displaySettingsPanel(&$wrapper, $errors = null) {
 			parent::displaySettingsPanel($wrapper, $errors);
-			
-			$div = new XMLElement('div', NULL, array('class' => 'group'));
-			
+						
 			$label = Widget::Label(__('XML Location'));
 			$input = Widget::Input('fields['.$this->get('sortorder').'][xml_location]', General::sanitize($this->get('xml_location')));
 			$label->appendChild($input);
+			
+			$wrapper->appendChild($label);
+
+			$div = new XMLElement('div', NULL, array('class' => 'group'));
+
+			$label = Widget::Label(__('Group (XPath)'));
+			$label->appendChild(new XMLElement('i', __('Optional')));
+			$input = Widget::Input('fields['.$this->get('sortorder').'][group_xpath]', General::sanitize($this->get('group_xpath')));
+			$label->appendChild($input);
 			$div->appendChild($label);
 			
+			$label = Widget::Label(__('Group Text (XPath)'));
+			$label->appendChild(new XMLElement('i', __('Optional')));
+			$input = Widget::Input('fields['.$this->get('sortorder').'][grouptext_xpath]', General::sanitize($this->get('grouptext_xpath')));
+			$label->appendChild($input);
+			$div->appendChild($label);
+			
+			$wrapper->appendChild($div);
+			
+			$div = new XMLElement('div', NULL, array('class' => 'group'));
+
 			$label = Widget::Label(__('Item (XPath)'));
 			$input = Widget::Input('fields['.$this->get('sortorder').'][item_xpath]', General::sanitize($this->get('item_xpath')));
 			$label->appendChild($input);

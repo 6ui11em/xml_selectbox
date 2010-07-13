@@ -22,6 +22,8 @@
 			  `field_id` int(11) NOT NULL,
 			  `allow_multiple_selection` enum('yes','no') NOT NULL default 'no',
 			  `xml_location` varchar(255) NOT NULL default '',
+			  `group_xpath` varchar(255) NOT NULL default '',
+			  `grouptext_xpath` varchar(255) NOT NULL default '',
 			  `item_xpath` varchar(255) NOT NULL default '',
 			  `text_xpath` varchar(255) NOT NULL,
 			  `value_xpath` varchar(255) default NULL,
